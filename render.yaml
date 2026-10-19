@@ -1,0 +1,40 @@
+services:
+  # Onchain Caching Proxy Web Service
+  - type: web
+    name: onchain-caching-proxy
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: 8085
+      - key: DATABASE_URL
+        fromDatabase:
+          name: onchain-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: onchain-redis
+          property: connectionString
+      - key: CACHE_DEFAULT_TTL_SECONDS
+        value: "300"
+      - key: LOG_LEVEL
+        value: INFO
+
+  # Redis for Caching and Redlock
+  - type: redis
+    name: onchain-redis
+    plan: free
+    region: oregon
+    ipAllowList: [] # internal only
+
+# Managed PostgreSQL Database
+databases:
+  - name: onchain-postgres
+    databaseName: onchain_db
+    user: onchain_user
+    plan: free
+    region: oregon

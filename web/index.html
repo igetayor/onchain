@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onchain | Enterprise Caching Proxy & Data Access Layer</title>
+  <meta name="description" content="High-throughput Read-Through & Write-Through Caching Proxy using FastAPI, Redis, and PostgreSQL/SQLAlchemy with Redlock distributed stampede protection.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #050811;
+      --bg-card: #0b1120;
+      --bg-card-hover: #111a30;
+      --bg-surface: #0f172a;
+      --border-subtle: #1e293b;
+      --border-accent: #334155;
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --secondary: #10b981;
+      --secondary-glow: rgba(16, 185, 129, 0.25);
+      --accent: #8b5cf6;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: -220px;
+      right: -220px;
+      width: 750px;
+      height: 750px;
+      background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-glow-2 {
+      position: fixed;
+      bottom: -220px;
+      left: -220px;
+      width: 750px;
+      height: 750px;
+      background: radial-gradient(circle, var(--secondary-glow) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header.navbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(5, 8, 17, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.9rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 1.25rem;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .brand-text h1 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text span {
+      font-size: 0.75rem;
+      color: var(--secondary);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover, .nav-link.active { color: #fff; }
+
+    .system-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--secondary);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--secondary);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--secondary);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    main.container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 5rem;
+      position: relative;
+      z-index: 10;
+    }
+
+    .hero {
+      text-align: center;
+      max-width: 920px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #93c5fd;
+      margin-bottom: 1.25rem;
+    }
+
+    .hero-title {
+      font-size: 2.85rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.1rem;
+      background: linear-gradient(180deg, #ffffff 30%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Telemetry KPI Metrics */
+    .metrics-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 3rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-accent);
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+    }
+
+    .metric-label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+
+    .metric-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: #fff;
+    }
+
+    .metric-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    /* 2-Column Split Panel */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 2rem;
+      margin-bottom: 3.5rem;
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 1.25rem 1.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(15, 23, 42, 0.6);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .panel-body {
+      padding: 1.75rem;
+      flex: 1;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.45rem;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 0.85rem 1.2rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn-read {
+      background: linear-gradient(135deg, var(--primary), #2563eb);
+      color: #fff;
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+
+    .btn-write {
+      background: linear-gradient(135deg, var(--secondary), #059669);
+      color: #fff;
+      box-shadow: 0 4px 15px var(--secondary-glow);
+    }
+
+    .btn:hover { transform: translateY(-2px); }
+    .btn:active { transform: translateY(0); }
+
+    .code-preview {
+      background: #030712;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: #93c5fd;
+      overflow-x: auto;
+      max-height: 200px;
+      margin-top: 1rem;
+    }
+
+    /* Cache Telemetry Card */
+    .telemetry-hero {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .tag-row {
+      display: flex;
+      gap: 0.6rem;
+      margin-bottom: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    .cache-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    .tag-HIT { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); }
+    .tag-MISS { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+    .tag-WRITE_THROUGH { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); }
+
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      font-size: 0.82rem;
+    }
+
+    .telemetry-item {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.35rem;
+    }
+
+    .telemetry-item span:first-child { color: var(--text-dim); }
+    .telemetry-item span:last-child { color: #fff; font-family: var(--font-mono); font-weight: 600; }
+
+    /* Architecture Flow Chart */
+    .arch-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-top: 3.5rem;
+    }
+
+    .arch-flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+    }
+
+    .arch-node {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-accent);
+      border-radius: 12px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .arch-node-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 0.35rem;
+    }
+
+    .arch-node-desc {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 2.5rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      margin-top: 4rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--primary);
+      padding: 1rem 1.4rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      z-index: 999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="ambient-glow-2"></div>
+
+  <header class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-icon">O</div>
+      <div class="brand-text">
+        <h1>Onchain</h1>
+        <span>Caching Proxy & DAL</span>
+      </div>
+    </a>
+    <nav class="nav-links">
+      <a href="#studio" class="nav-link active">Proxy Studio</a>
+      <a href="#telemetry" class="nav-link">Telemetry</a>
+      <a href="#architecture" class="nav-link">Redlock Flow</a>
+      <a href="/docs" target="_blank" class="nav-link">OpenAPI Swagger ↗</a>
+      <div class="system-badge">
+        <span class="pulse-dot"></span>
+        <span id="system-status-text">Proxy Active :8085</span>
+      </div>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-tag">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Redlock Stampede Protection & Read-Through / Write-Through Proxy
+      </div>
+      <h2 class="hero-title">Enterprise Caching Proxy<br><span>& Data Access Layer</span></h2>
+      <p class="hero-desc">
+        Eliminates cache stampedes during concurrent queries with distributed locks. Synchronously routes reads and writes between high-speed Redis memory and relational PostgreSQL with microsecond latency headers.
+      </p>
+    </section>
+
+    <!-- Metrics Bar -->
+    <section class="metrics-bar" id="telemetry">
+      <div class="metric-card">
+        <div class="metric-label">Cache Hit Ratio</div>
+        <div class="metric-value" id="stat-ratio" style="color: var(--secondary);">0.0%</div>
+        <div class="metric-sub">Cache efficiency percentage</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Total Reads</div>
+        <div class="metric-value" id="stat-reads">0</div>
+        <div class="metric-sub">Read-Through queries handled</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Cache Hits / Misses</div>
+        <div class="metric-value" id="stat-hits-misses">0 / 0</div>
+        <div class="metric-sub">Redis hits vs relational DB misses</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Stampedes Prevented</div>
+        <div class="metric-value" id="stat-stampedes" style="color: var(--primary);">0</div>
+        <div class="metric-sub">Protected by Redlock spin-locks</div>
+      </div>
+    </section>
+
+    <!-- Studio Grid -->
+    <div class="grid-2" id="studio">
+      <!-- Left Panel: Interactive Proxy Console -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            Proxy Operations Console
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-dim); font-family: var(--font-mono);">READ / WRITE THROUGH</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="form-label">Blockchain Account Address (0x...)</label>
+            <input type="text" id="op-address" class="form-input" value="0x71C84183204688257F4502F64f26A0a12F8e6B5A">
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Network</label>
+              <select id="op-network" class="form-select">
+                <option value="ethereum-mainnet" selected>Ethereum Mainnet</option>
+                <option value="polygon-pos">Polygon PoS</option>
+                <option value="arbitrum-one">Arbitrum One</option>
+                <option value="base-mainnet">Base Mainnet</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Balance</label>
+              <input type="number" id="op-balance" class="form-input" value="452.80" step="0.1">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Account Label</label>
+            <input type="text" id="op-label" class="form-input" value="Enterprise Vault #01">
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-read" onclick="executeReadThrough()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              Execute Read-Through
+            </button>
+            <button class="btn btn-write" onclick="executeWriteThrough()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              Execute Write-Through
+            </button>
+          </div>
+
+          <button class="btn" onclick="executeSimulatedStampede()" style="width: 100%; margin-top: 0.75rem; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+            Simulate 20-Concurrent Stampede
+          </button>
+        </div>
+      </section>
+
+      <!-- Right Panel: Live Response & Telemetry -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            Proxy Response & Telemetry
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-dim); font-family: var(--font-mono);" id="header-latency">0.0 ms</span>
+        </div>
+        <div class="panel-body">
+          <div class="telemetry-hero">
+            <div class="tag-row">
+              <span class="cache-tag tag-HIT" id="tag-cache-status">AWAITING OPERATION</span>
+              <span class="cache-tag" id="tag-data-source" style="background: rgba(255, 255, 255, 0.08); color: #e2e8f0;">SOURCE: -</span>
+            </div>
+            <div class="telemetry-grid">
+              <div class="telemetry-item">
+                <span>Cache Key:</span>
+                <span id="tel-key">-</span>
+              </div>
+              <div class="telemetry-item">
+                <span>Latency:</span>
+                <span id="tel-latency">-</span>
+              </div>
+              <div class="telemetry-item">
+                <span>Redlock Held:</span>
+                <span id="tel-lock">No</span>
+              </div>
+              <div class="telemetry-item">
+                <span>TTL Left:</span>
+                <span id="tel-ttl">-</span>
+              </div>
+            </div>
+          </div>
+
+          <label class="form-label">Data Payload Inspector</label>
+          <pre class="code-preview" id="response-inspector" style="max-height: 250px;">// Execute a Read-Through or Write-Through operation to inspect response</pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- Architecture Section -->
+    <section class="arch-container" id="architecture">
+      <h3 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin-bottom: 0.35rem;">Redlock Architecture & Cache Stampede Protection</h3>
+      <p style="color: var(--text-muted); font-size: 0.88rem;">How Onchain ensures high concurrency resilience across distributed nodes.</p>
+
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="arch-node-title">1. Read-Through Check</div>
+          <div class="arch-node-desc">Client queries entity. Redis checked first. If cache HIT, returns within &lt;1ms.</div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-title">2. Redlock Acquisition</div>
+          <div class="arch-node-desc">On cache MISS, acquires distributed atomic Redlock using unique UUID token.</div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-title">3. Stampede Spin-Wait</div>
+          <div class="arch-node-desc">Other concurrent requests wait on spin-lock while single worker queries PostgreSQL.</div>
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-title">4. Write-Through Sync</div>
+          <div class="arch-node-desc">Updates persist to DB and atomically populate Redis cache with TTL before release.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Onchain Enterprise Caching Proxy & DAL &bull; Python 3.13, FastAPI, Redis & SQLAlchemy &bull; Port 8085
+  </footer>
+
+  <div class="toast" id="toast">
+    <span id="toast-message">Operation successful</span>
+  </div>
+
+  <script>
+    async function executeReadThrough() {
+      const address = document.getElementById('op-address').value;
+      try {
+        const res = await fetch(`/api/v1/accounts/${address}`);
+        if (!res.ok && res.status === 404) {
+          showToast(`Account not in DB. Executing Write-Through creation first...`);
+          await executeWriteThrough();
+          return;
+        }
+        const envelope = await res.json();
+        updateInspector(envelope, res.headers);
+        fetchMetrics();
+        showToast(`Read-Through: ${envelope.cache_meta.cache_status}`);
+      } catch (err) {
+        showToast(`Error: ${err.message}`);
+      }
+    }
+
+    async function executeWriteThrough() {
+      const payload = {
+        address: document.getElementById('op-address').value,
+        network: document.getElementById('op-network').value,
+        balance: parseFloat(document.getElementById('op-balance').value),
+        label: document.getElementById('op-label').value
+      };
+
+      try {
+        let res = await fetch(`/api/v1/accounts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.status === 409) {
+          // Already exists -> Update with write-through
+          res = await fetch(`/api/v1/accounts/${payload.address}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ balance: payload.balance, label: payload.label })
+          });
+        }
+
+        const envelope = await res.json();
+        updateInspector(envelope, res.headers);
+        fetchMetrics();
+        showToast(`Write-Through Succeeded & Cache Populated`);
+      } catch (err) {
+        showToast(`Error: ${err.message}`);
+      }
+    }
+
+    async function executeSimulatedStampede() {
+      const address = document.getElementById('op-address').value;
+      showToast('Launching 20 concurrent queries simultaneously...');
+
+      // Invalidate cache first
+      await fetch(`/api/v1/accounts/${address}`, { method: 'DELETE' });
+
+      // Ensure account exists
+      await executeWriteThrough();
+      await fetch(`/api/v1/accounts/${address}`, { method: 'DELETE' }); // now cold cache in DB
+
+      // Fire 20 requests concurrently
+      const promises = Array.from({ length: 20 }, () => fetch(`/api/v1/accounts/${address}`));
+      const responses = await Promise.all(promises);
+
+      const hitMisses = await Promise.all(responses.map(r => r.json()));
+      const last = hitMisses[hitMisses.length - 1];
+      updateInspector(last, responses[0].headers);
+      fetchMetrics();
+      showToast('Stampede test completed! Check telemetry counter.');
+    }
+
+    function updateInspector(envelope, headers) {
+      const meta = envelope.cache_meta || {};
+      const status = meta.cache_status || 'HIT';
+
+      const tag = document.getElementById('tag-cache-status');
+      tag.textContent = status;
+      tag.className = `cache-tag tag-${status.includes('HIT') ? 'HIT' : status.includes('WRITE') ? 'WRITE_THROUGH' : 'MISS'}`;
+
+      document.getElementById('tag-data-source').textContent = `SOURCE: ${meta.data_source || 'CACHE'}`;
+      document.getElementById('tel-key').textContent = meta.cache_key || '-';
+      document.getElementById('tel-latency').textContent = `${meta.execution_time_ms || 0} ms`;
+      document.getElementById('tel-lock').textContent = meta.lock_acquired ? 'Yes (Acquired)' : 'No (Lock Free)';
+      document.getElementById('tel-ttl').textContent = `${meta.ttl_remaining_seconds || 0}s`;
+
+      document.getElementById('header-latency').textContent = headers ? `${headers.get('X-Process-Time-Ms') || meta.execution_time_ms} ms` : '-';
+      document.getElementById('response-inspector').textContent = JSON.stringify(envelope, null, 2);
+    }
+
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/api/v1/metrics');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('stat-ratio').textContent = `${data.cache_hit_ratio_pct}%`;
+        document.getElementById('stat-reads').textContent = data.total_reads;
+        document.getElementById('stat-hits-misses').textContent = `${data.cache_hits} / ${data.cache_misses}`;
+        document.getElementById('stat-stampedes').textContent = data.stampedes_prevented;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    fetchMetrics();
+    setInterval(fetchMetrics, 4000);
+  </script>
+</body>
+</html>

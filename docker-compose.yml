@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Relational Store
+  postgres:
+    image: postgres:16-alpine
+    container_name: onchain_postgres
+    environment:
+      POSTGRES_USER: onchain_user
+      POSTGRES_PASSWORD: onchain_secret_password
+      POSTGRES_DB: onchain_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onchain_user -d onchain_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - onchain_net
+
+  # Redis In-Memory Cache & Redlock Broker
+  redis:
+    image: redis:7-alpine
+    container_name: onchain_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --save 60 1
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - onchain_net
+
+  # Onchain Caching Proxy & Data Access Layer
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: onchain_proxy
+    ports:
+      - "8085:8085"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://onchain_user:onchain_secret_password@postgres:5432/onchain_db
+      - REDIS_URL=redis://redis:6379/2
+      - CACHE_DEFAULT_TTL_SECONDS=300
+      - LOG_LEVEL=INFO
+      - LOG_JSON_FORMAT=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - onchain_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  onchain_net:
+    driver: bridge
