@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
   <style>
     :root {
       --bg-dark: #050811;
@@ -521,7 +522,7 @@
       <a href="#studio" class="nav-link active">Proxy Studio</a>
       <a href="#telemetry" class="nav-link">Telemetry</a>
       <a href="#architecture" class="nav-link">Redlock Flow</a>
-      <a href="/docs" target="_blank" class="nav-link">OpenAPI Swagger ↗</a>
+      <a href="/docs" target="_blank" class="nav-link">OpenAPI Swagger â†—</a>
       <div class="system-badge">
         <span class="pulse-dot"></span>
         <span id="system-status-text">Proxy Active :8085</span>
@@ -697,10 +698,12 @@
   </div>
 
   <script>
+    const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8085' : '';
+
     async function executeReadThrough() {
       const address = document.getElementById('op-address').value;
       try {
-        const res = await fetch(`/api/v1/accounts/${address}`);
+        const res = await fetch(`${API_BASE}/api/v1/accounts/${address}`);
         if (!res.ok && res.status === 404) {
           showToast(`Account not in DB. Executing Write-Through creation first...`);
           await executeWriteThrough();
@@ -724,7 +727,7 @@
       };
 
       try {
-        let res = await fetch(`/api/v1/accounts`, {
+        let res = await fetch(`${API_BASE}/api/v1/accounts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -732,7 +735,7 @@
 
         if (res.status === 409) {
           // Already exists -> Update with write-through
-          res = await fetch(`/api/v1/accounts/${payload.address}`, {
+          res = await fetch(`${API_BASE}/api/v1/accounts/${payload.address}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ balance: payload.balance, label: payload.label })
@@ -753,14 +756,14 @@
       showToast('Launching 20 concurrent queries simultaneously...');
 
       // Invalidate cache first
-      await fetch(`/api/v1/accounts/${address}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/api/v1/accounts/${address}`, { method: 'DELETE' });
 
       // Ensure account exists
       await executeWriteThrough();
-      await fetch(`/api/v1/accounts/${address}`, { method: 'DELETE' }); // now cold cache in DB
+      await fetch(`${API_BASE}/api/v1/accounts/${address}`, { method: 'DELETE' }); // now cold cache in DB
 
       // Fire 20 requests concurrently
-      const promises = Array.from({ length: 20 }, () => fetch(`/api/v1/accounts/${address}`));
+      const promises = Array.from({ length: 20 }, () => fetch(`${API_BASE}/api/v1/accounts/${address}`));
       const responses = await Promise.all(promises);
 
       const hitMisses = await Promise.all(responses.map(r => r.json()));
@@ -790,7 +793,7 @@
 
     async function fetchMetrics() {
       try {
-        const res = await fetch('/api/v1/metrics');
+        const res = await fetch(`${API_BASE}/api/v1/metrics`);
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('stat-ratio').textContent = `${data.cache_hit_ratio_pct}%`;
@@ -814,3 +817,4 @@
   </script>
 </body>
 </html>
+
