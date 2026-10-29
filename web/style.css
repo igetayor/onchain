@@ -1,56 +1,34 @@
-﻿:root {
-      --bg-dark: #050811;
-      --bg-card: #0b1120;
-      --bg-card-hover: #111a30;
-      --bg-surface: #0f172a;
-      --border-subtle: #1e293b;
-      --border-accent: #334155;
-      --primary: #3b82f6;
-      --primary-glow: rgba(59, 130, 246, 0.25);
-      --secondary: #10b981;
-      --secondary-glow: rgba(16, 185, 129, 0.25);
-      --accent: #8b5cf6;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
-    }
+:root {
+  --bg-dark: #080a10;
+  --bg-card: #0e121d;
+  --bg-card-hover: #141a29;
+  --bg-surface: #121724;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(255, 255, 255, 0.15);
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.15);
+  --secondary: #10b981;
+  --secondary-glow: rgba(16, 185, 129, 0.15);
+  --accent: #8b5cf6;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      line-height: 1.6;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    .ambient-glow {
-      position: fixed;
-      top: -220px;
-      right: -220px;
-      width: 750px;
-      height: 750px;
-      background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .ambient-glow-2 {
-      position: fixed;
-      bottom: -220px;
-      left: -220px;
-      width: 750px;
-      height: 750px;
-      background: radial-gradient(circle, var(--secondary-glow) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
     header.navbar {
       position: sticky;
