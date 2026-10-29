@@ -136,6 +136,20 @@ async def create_account(
     cache_key = f"account:address:{payload.address.lower()}"
 
     async def _save_to_db():
+        stmt = select(OnchainAccount).where(OnchainAccount.address == payload.address)
+        result = await db.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.balance = payload.balance
+            existing.network = payload.network
+            if payload.label is not None:
+                existing.label = payload.label
+            existing.is_active = payload.is_active
+            existing.version += 1
+            await db.commit()
+            await db.refresh(existing)
+            return existing.to_dict()
+
         acc = OnchainAccount(
             address=payload.address,
             network=payload.network,

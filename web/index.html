@@ -204,12 +204,22 @@
     const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8085' : '';
 
     async function executeReadThrough() {
-      const address = document.getElementById('op-address').value;
+      const address = document.getElementById('op-address').value.trim();
       try {
         const res = await fetch(`${API_BASE}/api/v1/accounts/${address}`);
-        if (!res.ok && res.status === 404) {
-          showToast(`Account not in DB. Executing Write-Through creation first...`);
-          await executeWriteThrough();
+        if (!res.ok) {
+          if (res.status === 404) {
+            showToast(`Account not in DB. Executing Write-Through creation first...`);
+            await executeWriteThrough();
+            return;
+          }
+          const errText = await res.text();
+          let msg = `Server error ${res.status}`;
+          try {
+            const parsed = JSON.parse(errText);
+            msg = parsed.detail || msg;
+          } catch(e) {}
+          showToast(`Read error: ${msg}`);
           return;
         }
         const envelope = await res.json();
@@ -223,10 +233,10 @@
 
     async function executeWriteThrough() {
       const payload = {
-        address: document.getElementById('op-address').value,
+        address: document.getElementById('op-address').value.trim(),
         network: document.getElementById('op-network').value,
-        balance: parseFloat(document.getElementById('op-balance').value),
-        label: document.getElementById('op-label').value
+        balance: parseFloat(document.getElementById('op-balance').value) || 0,
+        label: document.getElementById('op-label').value.trim()
       };
 
       try {
@@ -236,13 +246,15 @@
           body: JSON.stringify(payload)
         });
 
-        if (res.status === 409) {
-          // Already exists -> Update with write-through
-          res = await fetch(`${API_BASE}/api/v1/accounts/${payload.address}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ balance: payload.balance, label: payload.label })
-          });
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = `Server error ${res.status}`;
+          try {
+            const parsed = JSON.parse(errText);
+            msg = parsed.detail || msg;
+          } catch(e) {}
+          showToast(`Write error: ${msg}`);
+          return;
         }
 
         const envelope = await res.json();
