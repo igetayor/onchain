@@ -46,6 +46,14 @@ class InMemoryCacheStore:
                 count += 1
         return count
 
+    async def delete_pattern(self, pattern: str) -> int:
+        import fnmatch
+        keys_to_del = [k for k in list(self._store.keys()) if fnmatch.fnmatch(k, pattern)]
+        for k in keys_to_del:
+            if k in self._store:
+                del self._store[k]
+        return len(keys_to_del)
+
     async def ttl(self, key: str) -> int:
         self._cleanup_expired(key)
         if key in self._store:
@@ -233,6 +241,21 @@ class CacheManager:
             except Exception:
                 pass
         return await self._fallback.delete(*keys)
+
+    async def invalidate_pattern(self, pattern: str) -> int:
+        """Invalidates all keys matching a glob pattern."""
+        count = 0
+        if self._redis:
+            try:
+                keys = []
+                async for key in self._redis.scan_iter(match=pattern):
+                    keys.append(key)
+                if keys:
+                    count = await self._redis.delete(*keys)
+                return count
+            except Exception:
+                pass
+        return await self._fallback.delete_pattern(pattern)
 
     # -------------------------------------------------------------------------
     # Core Read-Through Pattern with Redlock Stampede Protection
