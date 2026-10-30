@@ -1,6 +1,6 @@
 from functools import lru_cache
-from typing import List
-from pydantic import Field
+from typing import Any, List
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     app_version: str = Field(default="1.0.0", description="Service version")
     environment: str = Field(default="development", description="Runtime environment")
     debug: bool = Field(default=False, description="Debug mode")
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug_value(cls, v: Any) -> bool:
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on", "debug")
+        return bool(v)
+
     host: str = Field(default="0.0.0.0", description="HTTP host")
     port: int = Field(default=8085, description="HTTP port")
     cors_origins: List[str] = Field(default=["*"], description="Allowed CORS origins")

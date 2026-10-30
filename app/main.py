@@ -51,6 +51,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-Process-Time-Ms",
+        "X-Correlation-ID",
+        "X-Cache-Status",
+        "X-Cache-Key",
+        "X-Data-Source",
+    ],
 )
 
 # API routes

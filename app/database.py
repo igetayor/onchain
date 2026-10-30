@@ -43,6 +43,22 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         logger.info("Relational database schema ready.")
 
+    async with async_session_factory() as session:
+        from app.models import OnchainAccount
+        from sqlalchemy import select
+        res = await session.execute(select(OnchainAccount).limit(1))
+        if not res.scalar_one_or_none():
+            demo_acc = OnchainAccount(
+                address="0x71C84183204688257F4502F64f26A0a12F8e6B5A",
+                network="ethereum-mainnet",
+                label="Enterprise Vault #01",
+                balance=452.80,
+                is_active=True,
+            )
+            session.add(demo_acc)
+            await session.commit()
+            logger.info("Seeded initial default demo onchain account.")
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency yielding an async database session."""

@@ -270,14 +270,13 @@
       const address = document.getElementById('op-address').value;
       showToast('Launching 20 concurrent queries simultaneously...');
 
-      // Invalidate cache first
-      await fetch(`${API_BASE}/api/v1/accounts/${address}`, { method: 'DELETE' });
-
-      // Ensure account exists
+      // Ensure account exists in DB first
       await executeWriteThrough();
-      await fetch(`${API_BASE}/api/v1/accounts/${address}`, { method: 'DELETE' }); // now cold cache in DB
 
-      // Fire 20 requests concurrently
+      // Invalidate cache only (leaves account safe in database)
+      await fetch(`${API_BASE}/api/v1/cache/invalidate?pattern=account:*`, { method: 'POST' });
+
+      // Fire 20 requests concurrently to trigger Redlock stampede protection
       const promises = Array.from({ length: 20 }, () => fetch(`${API_BASE}/api/v1/accounts/${address}`));
       const responses = await Promise.all(promises);
 
@@ -285,10 +284,25 @@
       const last = hitMisses[hitMisses.length - 1];
       updateInspector(last, responses[0].headers);
       fetchMetrics();
-      showToast('Stampede test completed! Check telemetry counter.');
+      showToast('Stampede test completed! Redlock stampede protection activated.');
     }
 
     function updateInspector(envelope, headers) {
+      if (envelope.detail) {
+        // Error payload
+        const tag = document.getElementById('tag-cache-status');
+        tag.textContent = 'ERROR 404';
+        tag.className = 'cache-tag tag-MISS';
+        document.getElementById('tag-data-source').textContent = 'SOURCE: DATABASE (MISS)';
+        document.getElementById('tel-key').textContent = '-';
+        document.getElementById('tel-latency').textContent = '-';
+        document.getElementById('tel-lock').textContent = 'No';
+        document.getElementById('tel-ttl').textContent = '-';
+        document.getElementById('header-latency').textContent = '-';
+        document.getElementById('response-inspector').textContent = JSON.stringify(envelope, null, 2);
+        return;
+      }
+
       const meta = envelope.cache_meta || {};
       const status = meta.cache_status || 'HIT';
 
@@ -302,7 +316,8 @@
       document.getElementById('tel-lock').textContent = meta.lock_acquired ? 'Yes (Acquired)' : 'No (Lock Free)';
       document.getElementById('tel-ttl').textContent = `${meta.ttl_remaining_seconds || 0}s`;
 
-      document.getElementById('header-latency').textContent = headers ? `${headers.get('X-Process-Time-Ms') || meta.execution_time_ms} ms` : '-';
+      const headerLatency = headers && headers.get ? headers.get('X-Process-Time-Ms') : null;
+      document.getElementById('header-latency').textContent = `${headerLatency || meta.execution_time_ms || 0} ms`;
       document.getElementById('response-inspector').textContent = JSON.stringify(envelope, null, 2);
     }
 
